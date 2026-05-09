@@ -1,8 +1,10 @@
+from typing import List
 from openai import OpenAI
+from langchain_core.embeddings import Embeddings
 from app.config import Config
 
 
-class EmbeddingClient:
+class TongyiEmbeddings(Embeddings):
     def __init__(self):
         self.client = OpenAI(
             api_key=Config.DASHSCOPE_API_KEY,
@@ -10,18 +12,19 @@ class EmbeddingClient:
         )
         self.model = Config.EMBEDDING_MODEL
 
-    def embed_text(self, text: str) -> list[float]:
-        """获取文本的向量表示"""
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        response = self.client.embeddings.create(
+            model=self.model,
+            input=texts
+        )
+        return [item.embedding for item in response.data]
+
+    def embed_query(self, text: str) -> List[float]:
         response = self.client.embeddings.create(
             model=self.model,
             input=text
         )
         return response.data[0].embedding
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """批量获取向量"""
-        response = self.client.embeddings.create(
-            model=self.model,
-            input=texts
-        )
-        return [item.embedding for item in response.data]
+
+embedding_model = TongyiEmbeddings()

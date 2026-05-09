@@ -1,74 +1,60 @@
-from app.llm.qwen_client import QwenClient
-from sentence_transformers import CrossEncoder
-
-from app import config
+import json
+from app.llm.qwen_client import llm
+from app.config import Config
 
 
 class Reranker:
-    def __init__(self):
-        self.llm = QwenClient()
-    
-    def rerank(self, query: str, results: dict, top_k: int = config.Config.RERANK_TOP_K) -> list:
-        if not results or not results.get('documents'):
-            return []
-        
-        docs = results['documents'][0]
-        metadatas = results['metadatas'][0]
-        
-        if len(docs) <= top_k:
-            return self._format_results(docs, metadatas)
-        
-        scored = []
-        for doc, meta in zip(docs[:top_k * 4], metadatas[:top_k * 4]):
-            score = self._score(query, doc)
-            scored.append((score, doc, meta))
-        
-        scored.sort(key=lambda x: x[0], reverse=True)
-        
-        top_results = scored[:top_k]
-        return self._format_results([t[1] for t in top_results], [t[2] for t in top_results])
-    
-    def rerank_cross(self, query: str, results: dict, top_k: int = config.Config.RERANK_TOP_K) -> list:
-        if not results or not results.get('documents'):
-            return []
-        
-        docs = results['documents'][0]
-        metadatas = results['metadatas'][0]
-        
-        if len(docs) <= top_k:
-            return self._format_results(docs, metadatas)
-        
-
-        model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        
-        pairs = [[query, doc] for doc in docs[:top_k * 4]]
-        scores = model.predict(pairs)
-        
-        scored = list(zip(scores, docs[:top_k * 4], metadatas[:top_k * 4]))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        
-        top_results = scored[:top_k]
-        return self._format_results([t[1] for t in top_results], [t[2] for t in top_results])
-
-
-    def _score(self, query: str, doc: str) -> float:
-        prompt = f"""请判断下面文档和问题相关程度，打分 0-10：
-问题：{query}
-文档：{doc}
-请直接输出数字分数，不要其他内容："""
+    def rerank(self, query: str, docs: list, top_k: int = None):
         try:
-            response = self.llm.chat(prompt)
-            score = float(response.strip())
-            return min(max(score, 0), 10)
+            from langchain_core.documents import Document
+            is_documents = docs and isinstance(docs[0], Document)
         except:
-            return 5.0
-    
-    def _format_results(self, docs: list, metadatas: list) -> list:
-        results = []
-        for i, (doc, meta) in enumerate(zip(docs, metadatas), 1):
-            results.append({
-                "rank": i,
-                "content": doc,
-                "metadata": meta
-            })
-        return results
+            is_documents = False
+
+        if top_k is None:
+            top_k = Config.RERANK_TOP_K
+
+        if len(docs) <= top_k:
+            return docs
+
+        candidates = docs[:top_k * Config.CANDIDATE_POOL_MULTIPLIER]
+
+        docs_text = ""
+        for i, doc in enumerate(candidates, 1):
+            text = doc.page_content if is_documents else doc.get("content", str(doc))
+            docs_text += f"[{i}] {text[:200]}\n"
+
+        try:
+            response = llm.invoke([
+                {"role": "user", "content": f"""从以下文档中选出与问题最相关的{top_k}篇，返回编号 JSON：
+问题：{query}
+
+文档列表：
+{docs_text}
+
+请只输出 JSON：{{"top": [编号1, 编号2, ...]}}，按相关性降序。"""}
+            ])
+            start = response.find('{')
+            end = response.rfind('}') + 1
+            if start != -1 and end > start:
+                data = json.loads(response[start:end])
+                indices = data.get('top', [])
+            else:
+                indices = list(range(1, len(candidates) + 1))
+
+            scored = []
+            seen = set()
+            for idx in indices:
+                try:
+                    i = int(idx) - 1
+                    if 0 <= i < len(candidates) and i not in seen:
+                        seen.add(i)
+                        scored.append(candidates[i])
+                except:
+                    pass
+            for i, doc in enumerate(candidates):
+                if i not in seen:
+                    scored.append(doc)
+            return scored[:top_k]
+        except:
+            return candidates[:top_k]
