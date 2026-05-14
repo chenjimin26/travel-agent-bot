@@ -5,6 +5,7 @@ __pycache__/
 .env
 env
 data/chroma_db/
+data/logs/
 data/attractions/
 .DS_Store
 *.log

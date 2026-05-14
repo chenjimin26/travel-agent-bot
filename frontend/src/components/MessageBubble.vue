@@ -39,21 +39,49 @@ const props = defineProps({
 
 function formatContent(text) {
   if (!text) return ''
-  let formatted = text
-    // Fix: add newline before list markers that are missing it
-    .replace(/(?<!\n)([*-]\s)/g, '\n$1')
-    // Fix: add newline before ### headings
-    .replace(/(?<!\n)(#{1,4}\s)/g, '\n$1')
-    // Fix: ensure single * is treated as list (LLM sometimes uses * without \n)
-    .replace(/(?<!\n)(\*)([^\s*])/g, '\n* $2')
-    // Collapse excessive blank lines
+  const lines = text.split('\n')
+  const result = []
+  let inBlockquote = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // 表格行跳过
+    if (trimmed.startsWith('|') && trimmed.includes('|', 1)) {
+      inBlockquote = false; result.push(line); continue
+    }
+    // 空行：结束引用块
+    if (!trimmed) {
+      inBlockquote = false; result.push(line); continue
+    }
+    // 标题：结束引用块
+    if (/^#{1,4}\s/.test(trimmed)) {
+      inBlockquote = false; result.push(line); continue
+    }
+    // 进入或继续引用块
+    if (trimmed.startsWith('>')) {
+      inBlockquote = true; result.push(line); continue
+    }
+    // 引用块内的后续行，自动补 >
+    if (inBlockquote) {
+      result.push('> ' + trimmed); continue
+    }
+    // 普通行
+    let l = line
+      .replace(/([*-]\s)/g, '\n$1')
+      .replace(/(#{1,4}\s)/g, '\n$1')
+      .replace(/(?<!\*)\*(?!\*)(?=[：，。、！？；])/g, '')
+    result.push(l)
+  }
+  let formatted = result.join('\n')
+    // 修复不配对的星号
+    .replace(/\*{3,}/g, '**')
+    .replace(/\*\*([^*]+)\*(?!\*)/g, '**$1')
     .replace(/\n{3,}/g, '\n\n')
   return formatted
 }
 
 const renderedContent = computed(() => {
   const formatted = formatContent(props.message.content || '')
-  return marked.parse(formatted)
+  return marked.parse(formatted, { gfm: true, breaks: true })
 })
 
 function formatTime(iso) {
@@ -81,12 +109,14 @@ function formatTime(iso) {
 }
 
 .message-bubble {
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-lg);
   font-size: 15px;
-  line-height: 1.7;
-  word-break: break-word;
+  line-height: 1.9;
+  word-break: normal;
+  overflow-wrap: break-word;
   min-width: 0;
+  overflow: hidden;
 }
 
 .user .message-bubble {
@@ -106,94 +136,36 @@ function formatTime(iso) {
 
 .message-content {
   position: relative;
+  overflow: hidden;
 }
 
-.markdown-body :deep(h1) {
-  font-size: 1.35em;
-  font-weight: 700;
-  margin: 0.6em 0 0.3em;
-  line-height: 1.4;
-}
-
-.markdown-body :deep(h2) {
-  font-size: 1.2em;
-  font-weight: 700;
-  margin: 0.6em 0 0.3em;
-  line-height: 1.4;
-}
-
-.markdown-body :deep(h3) {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin: 0.5em 0 0.2em;
+.markdown-body {
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .markdown-body :deep(p) {
-  margin: 0.4em 0;
-}
-
-.markdown-body :deep(p:first-child) {
-  margin-top: 0;
-}
-
-.markdown-body :deep(p:last-child) {
-  margin-bottom: 0;
+  margin: 0.6em 0;
 }
 
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
-  margin: 0.3em 0;
-  padding-left: 1.5em;
-}
-
-.markdown-body :deep(li) {
-  margin: 0.15em 0;
-}
-
-.markdown-body :deep(strong),
-.markdown-body :deep(b) {
-  font-weight: 700;
-  color: var(--color-primary-dark);
-}
-
-.markdown-body :deep(code) {
-  background: var(--color-primary-light);
-  padding: 0.15em 0.4em;
-  border-radius: 3px;
-  font-size: 0.9em;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
-}
-
-.markdown-body :deep(pre) {
-  background: #1E293B;
-  color: #E2E8F0;
-  padding: 0.8em 1em;
-  border-radius: var(--radius-sm);
-  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
   margin: 0.5em 0;
   font-size: 0.85em;
-  line-height: 1.5;
+  table-layout: auto;
 }
 
-.markdown-body :deep(pre code) {
-  background: none;
-  padding: 0;
-  color: inherit;
-}
-
-.markdown-body :deep(blockquote) {
-  border-left: 3px solid var(--color-primary);
-  padding: 0.3em 0.8em;
-  margin: 0.4em 0;
-  color: var(--color-text-secondary);
-  background: var(--color-primary-light);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-.markdown-body :deep(hr) {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 0.8em 0;
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .markdown-body :deep(em),
@@ -203,6 +175,16 @@ function formatTime(iso) {
 
 .markdown-body :deep(br + br) {
   display: none;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 0.6em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.93em;
+  color: var(--color-text-secondary);
 }
 
 .typing-cursor {
@@ -237,4 +219,10 @@ function formatTime(iso) {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--space-sm);
 }
+
+/* 段落间距和提示块样式 */
+.markdown-body :deep(p) { margin: 0.6em 0; }
+.markdown-body :deep(h3) { margin: 1em 0 0.3em; }
+.markdown-body :deep(h4) { margin: 0.8em 0 0.2em; }
+.markdown-body :deep(blockquote) { margin: 0.6em 0; padding: 0.5em 1em; border-left: 4px solid var(--color-primary); background: var(--color-primary-light); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.93em; color: var(--color-text-secondary); }
 </style>

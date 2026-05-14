@@ -38,3 +38,8 @@ class AgentState(TypedDict):
 
     # ── 错误 ──
     error: str
+    transport_retries: int
+    guide_retries: int
+    retriever_retries: int
+    hotel_retries: int
+    budget_mode: int               # 0=正常 1=预算超标切便宜模式

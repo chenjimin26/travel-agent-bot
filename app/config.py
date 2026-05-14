@@ -19,11 +19,11 @@ class Settings(BaseSettings):
 
     # ── Model ──
     EMBEDDING_MODEL: str = "text-embedding-v3"
-    LLM_MODEL: str = "qwen3.6-flash-2026-04-16"
+    LLM_MODEL: str = "qwen3.6-flash"
 
     # ── Model Registry ──
     MODEL_REGISTRY: dict = {
-        "qwen-flash": "qwen3.6-flash-2026-04-16",
+        "qwen-flash": "qwen3.6-flash",
         "qwen-plus": "qwen3.6-plus",
         "glm": "glm-5.1",
         "kimi": "kimi-k2.6",

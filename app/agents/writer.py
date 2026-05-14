@@ -20,7 +20,7 @@ class WriterAgent:
         self.llm = get_llm("qwen-flash")
 
     def write(self, plan: dict, attractions: list[dict], intent: dict,
-              transport: dict = None, hotels: dict = None) -> str:
+              transport: dict = None, hotels: dict = None, guide: dict = None) -> str:
         import json
 
         parts = []
@@ -28,7 +28,12 @@ class WriterAgent:
         if transport and transport.get("go_train"):
             g = transport["go_train"]
             b = transport["back_train"]
-            parts.append(f"🚄 交通：去程 {g.get('train_no','?')} {g.get('depart','?')}-{g.get('arrive','?')} ￥{g.get('price',0)} | 返程 {b.get('train_no','?')} ￥{b.get('price',0)} | 合计 ￥{transport.get('total_transport_cost',0)}")
+            total = transport.get("total_transport_cost", 0)
+            np = intent.get("num_people") or 1
+            parts.append(f"""🚄 交通（{np}人）：
+- 去程：{g.get('train_no','?')}次 {g.get('date','?')} {g.get('depart','?')}-{g.get('arrive','?')} ￥{g.get('price',0)}/人
+- 返程：{b.get('train_no','?')}次 {b.get('date','?')} {b.get('depart','?')}-{b.get('arrive','?')} ￥{b.get('price',0)}/人
+- 单人往返：￥{total} × {np}人 = ￥{total * np}""")
 
         if hotels and hotels.get("hotels"):
             hl = "\n".join([f"- {h.get('name','?')} {h.get('price','?')}" for h in hotels["hotels"][:3]])
@@ -39,13 +44,22 @@ class WriterAgent:
 
         plan_text = json.dumps(plan, ensure_ascii=False, indent=2) if plan else "{}"
 
-        user_content = f"""目的地：{intent.get('destination','')} | {intent.get('days',1)}天 | 预算：{intent.get('budget',0)}元
+        # 天气
+        weather = guide.get("weather", "") if guide else ""
+        if "暂无" in weather:
+            weather = "（天气预报暂未覆盖出行日期，请临近出发再查）"
+
+        # Evaluator 建议
+        np = intent.get("num_people") or 1
+        user_content = f"""目的地：{intent.get('destination','')} | {intent.get('days',1)}天 | {np}人 | 预算：{intent.get('budget',0)}元
+
+天气：{weather}
 
 {chr(10).join(parts)}
 
 行程计划：{plan_text}
 
-请输出完整攻略，包含预算汇总表格。"""
+请输出完整攻略，包含预算汇总表格。如有审核建议，附在末尾提醒。"""
 
         messages = [
             {"role": "system", "content": WRITER_PROMPT},

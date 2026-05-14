@@ -27,7 +27,13 @@ def index_all_cities(data_dir: str = None):
         texts = [doc.page_content for doc in docs]
         metadatas = [doc.metadata for doc in docs]
 
-        store.add_texts(texts, metadatas=metadatas, ids=ids)
+        # 分批写入，每批最多10条
+        for j in range(0, len(texts), 10):
+            store.add_texts(
+                texts[j:j+10],
+                metadatas=metadatas[j:j+10],
+                ids=ids[j:j+10]
+            )
 
         print(f"  done: {len(docs)} attractions")
 

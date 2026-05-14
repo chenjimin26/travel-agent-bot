@@ -1,0 +1,20 @@
+{
+  "buffer": [
+    [
+      "从无锡出发去贵州旅游，两个人，这周五晚上出发，下周三早上八点之前回来，帮我规划行程",
+      "请补充以下信息后重新提问：**旅行天数**"
+    ]
+  ],
+  "summary": "",
+  "intent": {
+    "destination": "贵州",
+    "departure": "无锡",
+    "start_date": "2026-05-15",
+    "days": 0,
+    "budget": 0.0,
+    "preferences": [],
+    "num_people": 2,
+    "departure_time": "18:00",
+    "return_by": "08:00"
+  }
+}

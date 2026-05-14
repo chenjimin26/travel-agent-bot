@@ -70,6 +70,11 @@ async def chat(request: ChatRequest):
                 "attractions": [],
                 "retry_count": 0,
                 "error": "",
+                "budget_mode": 0,
+                "transport_retries": 0,
+                "guide_retries": 0,
+                "retriever_retries": 0,
+                "hotel_retries": 0,
                 "previous_intent": mem.previous_intent
             })
             response = result.get("final_output", "系统处理超时，请重试")
