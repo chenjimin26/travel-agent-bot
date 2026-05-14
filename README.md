@@ -1,6 +1,31 @@
 # 旅行攻略规划系统 (Travel Agent Bot)
 
-基于 LangGraph + RAG 的多智能体旅行规划系统，可自动查询车票、搜索景点、推荐酒店、编排行程并审核预算。
+基于 LangGraph + RAG 的多智能体旅行规划系统，内嵌自建 RAG 知识库（986 个景点），自动完成车票查询、景点检索、酒店匹配、行程编排与预算审核。
+
+![架构流程图](assets/流程图.png)
+
+## 架构
+
+**Fast 模式**：纯 RAG 链路。Query → Embedding → Chroma 向量检索 → MQE/HyDE 扩展 → LLM 重排序 → 生成。单次约 16 秒。
+
+**Precision 模式**：LangGraph 8 节点 StateGraph。
+
+```
+Supervisor → fanout → {Transport‖Guide‖Retriever} → Hotel → Planner → Evaluator → Writer
+```
+
+## 数据流向
+
+| 节点 | 读取 | 写入 |
+|------|------|------|
+| Supervisor | query | intent, previous_intent |
+| Transport | intent | transport |
+| Guide | intent | guide |
+| Retriever | intent, guide | attractions |
+| Hotel | intent, guide | hotels |
+| Planner | attractions, intent, guide, hotels, evaluation | plan |
+| Evaluator | plan, intent, transport, hotels | evaluation, budget_mode, retry_count |
+| Writer | error, plan, attractions, intent, transport, hotels, guide | final_output |
 
 ## 项目结构
 
@@ -45,12 +70,12 @@ npm run dev
 
 ## 配置
 
-参数在 `app/config.py` 中集中管理，包括：
+参数在 `app/config.py` 中集中管理：
 
 | 配置 | 说明 |
 |------|------|
 | `LLM_MODEL` | 默认模型 |
-| `MODEL_REGISTRY` | 多模型注册表（qwen/kimi/glm/deepseek 等） |
+| `MODEL_REGISTRY` | 多模型注册表（qwen/kimi/glm/deepseek/minimax） |
 | `TOP_K` | 检索候选池大小 |
 | `ENABLE_MQE` | 多查询扩展 |
 | `ENABLE_HYDE` | 假设文档嵌入 |
